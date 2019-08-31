@@ -1,0 +1,112 @@
+version: 2
+
+defaults: &defaults
+  docker:
+    - image: circleci/golang:1.12
+      environment:
+        GO111MODULE: "on"
+
+  working_directory: /go/src/sampleapp
+
+deploy_k8s: &deploy_k8s
+  working_directory: /go/src/sampleapp
+  steps:
+    - checkout
+    - setup_remote_docker
+    - run:
+        name: Setup Google Cloud SDK
+        command: bin/auth
+    - run:
+        name: Setup Google Cloud SDK
+        command: bin/auth
+
+    - run:
+        name: Deploy to Kubernetes
+        command: |
+          envsubst < deploy/k8s/deployment.yaml > deploy/k8s/patched_deployment.yaml
+          rm deploy/k8s/deployment.yaml
+          kubectl apply -f deploy/k8s/
+          kubectl rollout status deployment/server
+
+jobs:
+  test:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-pkg-cache
+            -
+      - run:
+          name: Get Dependencies
+          command: GO111MODULE=on go get -d -v ./...
+
+      - run:
+          name: Run linters
+          command: |
+            wget -O - -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s v1.17.1
+            ./bin/golangci-lint run ./... -D errcheck
+
+      - run:
+          name: Run Tests
+          command: |
+            go get gotest.tools/gotestsum
+            mkdir junit
+            gotestsum --junitfile junit/unit-tests.xml
+
+      - save_cache:
+          key: v1-pkg-cache
+          paths:
+            - "/go/pkg"
+
+  build:
+
+    <<: *defaults
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Build Binary
+          command: |
+            GO111MODULE=on GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -a -o /go/src/sampleapp/sampleappbin ./server.go
+
+      - run:
+          name: Build Docker image
+          command: |
+            docker build . -t ivantrips/sampleapp:${CIRCLE_SHA1} -f deploy/Dockerfile
+
+      - run:
+          name: Publish image
+          command: |
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            docker push ivantrips/sampleapp:${CIRCLE_SHA1}
+
+  deploy:
+    docker:
+      - image: google/cloud-sdk
+        environment:
+          - GOOGLE_PROJECT_ID: "personio-test-ivan"
+          - GOOGLE_COMPUTE_ZONE: "us-central1-a"
+          - GOOGLE_LOCATION: "us-central1"
+          - GOOGLE_CLUSTER_NAME: "sre-test"
+    <<: *deploy_k8s
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - test
+      - build:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master

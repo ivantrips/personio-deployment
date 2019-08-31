@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.appName }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- range $key, $value := .Values.service.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  {{- range $portOption := .Values.service.ports }}
+  - name: {{ $portOption.name }}
+    port: {{ $portOption.port }}
+    {{- if $portOption.protocol }}
+    protocol: {{ $portOption.protocol }}
+    {{- end -}}
+    {{- if $portOption.targetPort }}
+    targetPort: {{ $portOption.targetPort }}
+    {{- end -}}
+  {{- end }}
+  selector:
+    app: {{ .Values.appName }}
+    release: {{ .Release.Name }}
+

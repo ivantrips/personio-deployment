@@ -1,0 +1,36 @@
+appName: server
+appType: samplegoapp
+image:
+  name: sampleapp
+  tag: cffeaaddcb63922d8531bcea848b197647d85ba3
+  repository: ivantrips
+  pullPolicy: Always
+
+envvar:
+   - name: GIN_MODE
+     value: release
+
+replicaCount: 1
+
+resources:
+ requests:
+   cpu: 100m
+   memory: 200Mi
+ limits:
+   cpu: 1000m
+   memory: 1Gi
+
+service:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 8080
+
+metrics:
+- type: Resource
+  resource:
+    name: memory
+    targetAverageUtilization: 50
+
+minReplicaCount: 1
+maxReplicaCount: 10

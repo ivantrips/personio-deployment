@@ -1,0 +1,47 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-{{ .Release.Namespace }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+        release: {{ .Release.Name }}
+    spec:
+    {{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+    {{- end }}
+    {{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+    {{- end }}
+      containers:
+      - name: {{ .Values.appName }}
+        image: {{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+          {{- range $portOption := .Values.service.ports }}
+        - containerPort: {{ $portOption.port }}
+          name: {{ $portOption.name }}
+          {{- end }}
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+
+        env:
+        {{- range $envVar := .Values.envvar }}
+        - name: {{ $envVar.name }}
+          {{- if $envVar.valueFrom }}
+          valueFrom:
+{{ toYaml $envVar.valueFrom | indent 12 }}
+          {{- else }}
+          value: {{ $envVar.value | quote }}
+          {{- end -}}
+        {{- end }}
