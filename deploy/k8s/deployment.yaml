@@ -29,6 +29,12 @@ spec:
           image: ivantrips/sampleapp:${CIRCLE_SHA1}
           imagePullPolicy: Always
           name: server
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
           ports:
             - containerPort: 8080
               name: http
